@@ -93,6 +93,19 @@ make verify
 make demo
 ```
 
+## Tests
+
+```bash
+make test          # runs the OPA policy tests + the Python unit tests
+```
+
+- **OPA** (`policies/enforce_security_test.rego`): every rule is asserted to fire on a
+  violating resource and stay silent on a compliant one, plus whole-policy checks
+  (fully-compliant → 0 denials, fully-insecure → 5).
+- **pytest** (`tests/test_explainer.py`): unit tests for the parser, prompt builder,
+  deterministic remediator, and the async LLM fan-out — with the LLM **mocked**, so the
+  suite is fast, deterministic, and needs no network or Ollama.
+
 The LLM backend defaults to `qwen2.5-coder:3b`:
 
 ```bash
@@ -129,7 +142,7 @@ The bundled policy set targets Azure Storage Account misconfigurations:
 
 - [x] Closed loop: scan → explain → remediate → **re-scan proves 0 violations**
 - [x] Parallel LLM calls (asyncio) + auto-remediation with unified diff
-- [ ] OPA test suite (`policies/*_test.rego`) + pytest for the explainer (mocked LLM)
+- [x] OPA test suite (`policies/*_test.rego`) + pytest for the explainer (mocked LLM)
 - [ ] GitHub Actions: scan + AI comment on PRs, **SARIF export to the Security tab**
 - [ ] Broader policies (NSG open ports, Key Vault) organised by category
 - [ ] Pluggable LLM backend (Ollama · Azure OpenAI · Anthropic, via env var)
