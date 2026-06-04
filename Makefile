@@ -21,7 +21,7 @@ YELLOW :=
 CYAN :=
 endif
 
-.PHONY: help tools-check az-login-check scan explain remediate demo test clean clean-all
+.PHONY: help tools-check az-login-check scan explain remediate demo test clean clean-all gif
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"; printf "%sAvailable targets:%s\n", "$(BOLD)", "$(RESET)"} /^[a-zA-Z0-9_.-]+:.*##/ {printf "  %s%-20s%s %s\n", "$(CYAN)", $$1, "$(RESET)", $$2}' $(MAKEFILE_LIST)
@@ -77,6 +77,11 @@ demo: ## Run tools-check, scan, and explain with headers
 	@$(MAKE) --no-print-directory scan
 	@printf "%s== Explain ==%s\n" "$(BOLD)" "$(RESET)"
 	@$(MAKE) --no-print-directory explain
+
+gif: ## Record the demo into demo/demo.gif (needs vhs + ollama + az login)
+	@command -v vhs >/dev/null 2>&1 || { echo "Error: vhs not installed (https://github.com/charmbracelet/vhs)." >&2; exit 1; }
+	@vhs demo/demo.tape
+	@echo "Wrote demo/demo.gif"
 
 test: ## Run OPA tests and pytest if any exist
 	@has_tests=0; \

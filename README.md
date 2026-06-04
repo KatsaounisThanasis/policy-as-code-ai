@@ -9,6 +9,8 @@
 ![Cloud](https://img.shields.io/badge/cloud-Azure-0078D4)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+![Demo: scan finds violations, the local LLM explains them, a deterministic engine fixes them](demo/demo.gif)
+
 ---
 
 ## The problem
