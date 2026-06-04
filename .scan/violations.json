@@ -1,0 +1,47 @@
+{
+  "result": [
+    {
+      "expressions": [
+        {
+          "value": [
+            {
+              "message": "Storage account allows nested items to be public. Set 'allow_nested_items_to_be_public' to false.",
+              "resource": "azurerm_storage_account.sa",
+              "rule": "AZ-STORAGE-001",
+              "severity": "high"
+            },
+            {
+              "message": "Storage account does not require HTTPS traffic. Set 'https_traffic_only_enabled' to true.",
+              "resource": "azurerm_storage_account.sa",
+              "rule": "AZ-STORAGE-005",
+              "severity": "high"
+            },
+            {
+              "message": "Storage account has public network access enabled. Set 'public_network_access_enabled' to false.",
+              "resource": "azurerm_storage_account.sa",
+              "rule": "AZ-STORAGE-003",
+              "severity": "high"
+            },
+            {
+              "message": "Storage account has shared access key enabled. Set 'shared_access_key_enabled' to false.",
+              "resource": "azurerm_storage_account.sa",
+              "rule": "AZ-STORAGE-002",
+              "severity": "medium"
+            },
+            {
+              "message": "Storage account minimum TLS version is not TLS1_2. Set 'min_tls_version' to 'TLS1_2'.",
+              "resource": "azurerm_storage_account.sa",
+              "rule": "AZ-STORAGE-004",
+              "severity": "medium"
+            }
+          ],
+          "text": "data.terraform.security.deny",
+          "location": {
+            "row": 1,
+            "col": 1
+          }
+        }
+      ]
+    }
+  ]
+}

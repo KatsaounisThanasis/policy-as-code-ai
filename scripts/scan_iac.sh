@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+TF_DIR="${REPO_ROOT}/terraform"
+POLICY_FILE="${REPO_ROOT}/policies/enforce_security.rego"
+OUT_DIR="${REPO_ROOT}/.scan"
+PLAN_BIN="${OUT_DIR}/tfplan"
+PLAN_JSON="${OUT_DIR}/tfplan.json"
+VIOLATIONS_JSON="${OUT_DIR}/violations.json"
+
+if [ -t 1 ] && command -v tput >/dev/null 2>&1; then
+  RED="$(tput setaf 1)"
+  GREEN="$(tput setaf 2)"
+  YELLOW="$(tput setaf 3)"
+  BOLD="$(tput bold)"
+  RESET="$(tput sgr0)"
+else
+  RED=""
+  GREEN=""
+  YELLOW=""
+  BOLD=""
+  RESET=""
+fi
+
+require_cmd() {
+  local cmd="$1"
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "${RED}Error: required command not found: ${cmd}.${RESET}" >&2
+    exit 1
+  fi
+}
+
+require_cmd terraform
+require_cmd opa
+require_cmd jq
+
+mkdir -p "$OUT_DIR"
+
+if [ ! -d "${TF_DIR}/.terraform" ]; then
+  echo "${BOLD}Initializing Terraform...${RESET}"
+  (cd "$TF_DIR" && terraform init -input=false -upgrade)
+fi
+
+echo "${BOLD}Running terraform plan...${RESET}"
+if ! (cd "$TF_DIR" && terraform plan -out="$PLAN_BIN" -input=false -lock=false); then
+  echo "${RED}Error: terraform plan failed. Ensure Azure auth env vars are set (ARM_SUBSCRIPTION_ID, ARM_TENANT_ID, ARM_CLIENT_ID, ARM_CLIENT_SECRET) or run 'az login'.${RESET}" >&2
+  exit 1
+fi
+
+echo "${BOLD}Converting plan to JSON...${RESET}"
+(cd "$TF_DIR" && terraform show -json "$PLAN_BIN" > "$PLAN_JSON")
+
+echo "${BOLD}Evaluating OPA policies...${RESET}"
+opa eval --format=json -i "$PLAN_JSON" -d "$POLICY_FILE" 'data.terraform.security.deny' > "$VIOLATIONS_JSON"
+
+violation_count="$(jq '.result[0].expressions[0].value | length' "$VIOLATIONS_JSON")"
+
+if [ "$violation_count" -gt 0 ]; then
+  echo "${YELLOW}Violations:${RESET}"
+  jq -r '.result[0].expressions[0].value[] | "rule=\(.rule) severity=\(.severity) resource=\(.resource) message=\(.message)"' "$VIOLATIONS_JSON"
+fi
+
+if [ "$violation_count" -eq 0 ]; then
+  echo "${GREEN}Summary: 0 violations.${RESET}"
+  exit 0
+fi
+
+echo "${RED}Summary: ${violation_count} violation(s).${RESET}"
+exit 2
