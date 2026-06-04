@@ -17,6 +17,10 @@ override.tf.json
 .scan/verify_*
 # Kept as sample output: .scan/violations.json, .scan/explanations.md
 
+# ── CI artifacts (generated locally when testing the workflow) ──
+/violations.json
+/policy.sarif
+
 # ── Python ───────────────────────────────────────────────────
 __pycache__/
 *.py[cod]

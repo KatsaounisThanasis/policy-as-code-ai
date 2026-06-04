@@ -7,6 +7,7 @@
 ![Terraform](https://img.shields.io/badge/IaC-Terraform-844FBA)
 ![LLM](https://img.shields.io/badge/LLM-local%20(Ollama)-000000)
 ![Cloud](https://img.shields.io/badge/cloud-Azure-0078D4)
+[![Policy-as-Code CI](https://github.com/KatsaounisThanasis/policy-as-code-ai/actions/workflows/policy-scan.yml/badge.svg)](https://github.com/KatsaounisThanasis/policy-as-code-ai/actions/workflows/policy-scan.yml)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 ![Demo: scan finds violations, the local LLM explains them, a deterministic engine fixes them](demo/demo.gif)
@@ -126,6 +127,23 @@ The bundled policy set targets Azure Storage Account misconfigurations:
 
 > **No cost, no risk:** the pipeline runs `terraform plan` only — it **never applies**. OPA evaluates the plan JSON, so no Azure resources are ever created.
 
+## Continuous Integration
+
+`.github/workflows/policy-scan.yml` runs on every pull request and push to `main`:
+
+- **`tests` job** — runs the OPA policy tests and the Python unit tests.
+- **`policy-scan` job** — evaluates the policy set against a committed Terraform
+  plan fixture (`examples/insecure_plan.json`), then:
+  - converts the violations to **SARIF** (`scripts/opa_to_sarif.py`) and uploads them,
+    so findings appear in the repository's **Security ▸ Code scanning** tab with file
+    locations and severities;
+  - posts (and idempotently updates) a **PR comment** listing each violation and the
+    deterministic fix.
+
+The CI is intentionally **cloud-free and LLM-free**: it scans a plan fixture rather
+than calling Azure, and the AI risk explanations stay a local `make explain` step —
+keeping the "your IaC never leaves your machine" guarantee true even in CI.
+
 ## Project layout
 
 ```
@@ -143,7 +161,7 @@ The bundled policy set targets Azure Storage Account misconfigurations:
 - [x] Closed loop: scan → explain → remediate → **re-scan proves 0 violations**
 - [x] Parallel LLM calls (asyncio) + auto-remediation with unified diff
 - [x] OPA test suite (`policies/*_test.rego`) + pytest for the explainer (mocked LLM)
-- [ ] GitHub Actions: scan + AI comment on PRs, **SARIF export to the Security tab**
+- [x] GitHub Actions: policy scan on PRs → **SARIF export to the Security tab** + a PR comment with violations and deterministic fixes (cloud- and LLM-free)
 - [ ] Broader policies (NSG open ports, Key Vault) organised by category
 - [ ] Pluggable LLM backend (Ollama · Azure OpenAI · Anthropic, via env var)
 
