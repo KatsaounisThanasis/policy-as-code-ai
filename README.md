@@ -83,8 +83,11 @@ make scan
 # 2. explain: local LLM writes risk + fix + verification for each violation
 make explain
 
-# 3. remediate: write a fixed Terraform file + unified diff, then it's re-scanned clean
+# 3. remediate: write a fixed Terraform file + unified diff
 make remediate
+
+# 4. verify: re-scan the fixed Terraform and PROVE it passes the gate (0 violations)
+make verify
 
 # or run the whole story end-to-end
 make demo
