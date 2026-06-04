@@ -7,7 +7,7 @@ _Model: `qwen2.5-coder:3b` via Ollama. Source: `.scan/violations.json`._
 **Policy message:** Storage account allows nested items to be public. Set 'allow_nested_items_to_be_public' to false.
 
 ### Why this is risky
-If a storage account allows nested items to be public, unauthorized users can access and modify data stored within the account, potentially leading to data breaches or unauthorized modifications.
+If a storage account allows nested items to be public, unauthorized users could potentially access sensitive data stored within the account.
 
 ### Terraform remediation
 ```hcl
@@ -15,7 +15,7 @@ allow_nested_items_to_be_public = false
 ```
 
 ### Verification
-An engineer can confirm the fix by checking the `allow_nested_items_to_be_public` attribute of the storage account resource in the Azure portal or using the Azure CLI command `az storage account show`.
+An engineer can confirm the fix by running `terraform plan` and checking that `allow_nested_items_to_be_public` is set to `false`.
 
 **Azure docs:** <https://learn.microsoft.com/azure/storage/blobs/anonymous-read-access-prevent>
 
@@ -24,7 +24,7 @@ An engineer can confirm the fix by checking the `allow_nested_items_to_be_public
 **Policy message:** Storage account does not require HTTPS traffic. Set 'https_traffic_only_enabled' to true.
 
 ### Why this is risky
-Failure to enable HTTPS traffic on a storage account can expose sensitive data to unauthorized access over unencrypted connections, which could lead to data breaches and compliance issues.
+If a storage account does not require HTTPS traffic, it can be vulnerable to man-in-the-middle attacks and data interception. This could lead to sensitive information being exposed.
 
 ### Terraform remediation
 ```hcl
@@ -32,7 +32,7 @@ https_traffic_only_enabled = true
 ```
 
 ### Verification
-Check the `https_traffic_only_enabled` attribute of the storage account resource in Azure.
+Check the 'https_traffic_only_enabled' attribute of the storage account resource in Azure portal or using Azure CLI.
 
 **Azure docs:** <https://learn.microsoft.com/azure/storage/common/storage-require-secure-transfer>
 
@@ -41,7 +41,7 @@ Check the `https_traffic_only_enabled` attribute of the storage account resource
 **Policy message:** Storage account has public network access enabled. Set 'public_network_access_enabled' to false.
 
 ### Why this is risky
-If a storage account allows public network access, it can be accessed by anyone on the internet without authentication, which poses a significant security risk as it could lead to unauthorized data exposure and potential ransomware attacks.
+If public network access is enabled, unauthorized users can access the storage account and its resources over the internet, posing a risk to data security.
 
 ### Terraform remediation
 ```hcl
@@ -49,7 +49,7 @@ public_network_access_enabled = false
 ```
 
 ### Verification
-An engineer can confirm the fix by checking the `public_network_access_enabled` attribute of the storage account resource in Azure.
+Check the `public_network_access_enabled` attribute of the `azurerm_storage_account` resource.
 
 **Azure docs:** <https://learn.microsoft.com/azure/storage/common/storage-network-security>
 
@@ -58,7 +58,7 @@ An engineer can confirm the fix by checking the `public_network_access_enabled` 
 **Policy message:** Storage account has shared access key enabled. Set 'shared_access_key_enabled' to false.
 
 ### Why this is risky
-If the storage account has shared access keys enabled, it exposes sensitive information and can be used by unauthorized parties to perform operations on the storage account without authentication.
+If the storage account has shared access keys enabled, unauthorized users can gain access to sensitive data by using these keys. This poses a significant risk to data confidentiality and integrity.
 
 ### Terraform remediation
 ```hcl
@@ -66,7 +66,7 @@ shared_access_key_enabled = false
 ```
 
 ### Verification
-An engineer can confirm the fix by running `terraform plan` and verifying that `shared_access_key_enabled` is set to `false`.
+An engineer can confirm the fix by checking the `shared_access_key_enabled` attribute of the storage account in Azure portal or using the Azure CLI command `az storage account show --name <storage_account_name>`.
 
 **Azure docs:** <https://learn.microsoft.com/azure/storage/common/shared-key-authorization-prevent>
 
@@ -75,7 +75,7 @@ An engineer can confirm the fix by running `terraform plan` and verifying that `
 **Policy message:** Storage account minimum TLS version is not TLS1_2. Set 'min_tls_version' to 'TLS1_2'.
 
 ### Why this is risky
-Setting the minimum TLS version to less than TLS 1.2 can expose your storage account to potential security vulnerabilities, as older versions of TLS are no longer considered secure.
+If the storage account uses a minimum TLS version lower than TLS 1.2, it can expose sensitive data to potential attackers who might exploit vulnerabilities in older versions of TLS.
 
 ### Terraform remediation
 ```hcl
@@ -83,7 +83,7 @@ min_tls_version = "TLS1_2"
 ```
 
 ### Verification
-Check the `min_tls_version` attribute in the Azure Storage Account resource block to ensure it is set to 'TLS1_2'.
+An engineer can confirm the fix by checking the `min_tls_version` attribute of the storage account resource.
 
 **Azure docs:** <https://learn.microsoft.com/azure/storage/common/transport-layer-security-configure-minimum-version>
 

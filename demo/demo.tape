@@ -31,5 +31,11 @@ Sleep 700ms
 Type "python3 src/explainer.py --remediate" Enter
 Sleep 42s
 
+# --- 3. PROOF: re-scan the fixed Terraform -> 0 violations ---
+Type "#  3. Proof: re-scan the remediated Terraform against the same gate" Enter
+Sleep 700ms
+Type "make verify" Enter
+Sleep 15s
+
 # --- hold the final frame ---
 Sleep 3s

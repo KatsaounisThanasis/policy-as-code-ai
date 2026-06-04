@@ -14,6 +14,7 @@ override.tf.json
 .scan/tfplan
 .scan/tfplan.json
 .scan/main_fixed.tf
+.scan/verify_*
 # Kept as sample output: .scan/violations.json, .scan/explanations.md
 
 # ── Python ───────────────────────────────────────────────────
