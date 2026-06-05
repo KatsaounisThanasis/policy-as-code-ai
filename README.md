@@ -254,15 +254,6 @@ leaves your machine" guarantee holds even in CI.
 └── .scan/                       # generated reports (sample output kept in repo)
 ```
 
-## Roadmap
-
-- [x] Closed loop: scan → explain → remediate → **re-scan proves 0 violations**
-- [x] Parallel LLM calls (asyncio) + auto-remediation with unified diff
-- [x] OPA test suite (`policies/**/*_test.rego`) + pytest for the explainer (mocked LLM)
-- [x] GitHub Actions: policy scan on PRs → **SARIF export to the Security tab** + a PR comment with violations and deterministic fixes (cloud- and LLM-free)
-- [x] Broader policies across 10 resource categories, organised by folder
-- [x] Pluggable LLM backend (Ollama · Azure OpenAI · Anthropic, via env var)
-
 ## License
 
 [MIT](./LICENSE)
