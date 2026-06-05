@@ -1,7 +1,7 @@
 # 🛡️ Policy-as-Code + AI Drift Explainer
 
-> **Local-first policy-as-code with _provable_ remediation.**
-> The AI explains **why** each Terraform misconfiguration is a risk, a deterministic engine **fixes** it, and the pipeline **proves** the fix passes the policy gate again — all running locally, so your infrastructure code never leaves your machine.
+> **Local-first policy-as-code with provable remediation.**
+> The AI explains why each Terraform misconfiguration is risky. A deterministic engine writes the fix. The pipeline then re-runs the policy gate to prove the fix holds. All of it runs on your machine, so your infrastructure code never leaves it.
 
 ![Policy as Code](https://img.shields.io/badge/policy--as--code-OPA%2FRego-7D4698)
 ![Terraform](https://img.shields.io/badge/IaC-Terraform-844FBA)
@@ -16,38 +16,41 @@
 
 ## The problem
 
-Security scanners (Checkov, tfsec, OPA, KICS) are great at telling you **what** is wrong with your Infrastructure-as-Code — and terrible at everything after that. A typical run dumps 200 findings into a backlog. A security engineer files a ticket. Weeks later, an infra engineer maybe fixes it. Meanwhile the misconfiguration ships to production.
+Security scanners (Checkov, tfsec, OPA, KICS) are good at telling you what's wrong with your Infrastructure-as-Code, and not much help after that. A typical run dumps 200 findings into a backlog. A security engineer files a ticket. Weeks later an infra engineer maybe fixes it. Meanwhile the misconfiguration ships to production.
 
 Two gaps stay open:
 
-1. **Understanding** — a finding like `AZ-STORAGE-003: public_network_access_enabled` means nothing to a developer in a hurry. *Why* does it matter? *What* is the blast radius?
-2. **Action** — even when the fix is obvious, somebody has to write it, and prove it actually closes the finding.
+1. **Understanding.** A finding like `AZ-STORAGE-003: public_network_access_enabled` means nothing to a developer in a hurry. Why does it matter? What's the blast radius?
+2. **Action.** Even when the fix is obvious, somebody still has to write it and prove it actually closes the finding.
 
 ## What this does
 
-A closed loop that turns a raw policy violation into a **verified** fix:
+A closed loop that turns a raw policy violation into a verified fix:
 
 ```
 terraform plan ─▶ OPA/Rego scan ─▶ AI explains each violation ─▶ deterministic fix ─▶ re-scan proves 0 violations
 ```
 
-- **OPA/Rego** evaluates the Terraform plan and emits structured violations.
-- A **local LLM (Ollama)** writes a human-readable *risk explanation + verification hint* for each one, citing the canonical Microsoft Learn doc.
-- A **deterministic remediation engine** patches the offending attributes and emits a unified diff.
-- The patched file is **re-scanned** — and the report shows it now passes with **0 violations**. That's the proof.
+- OPA/Rego evaluates the Terraform plan and emits structured violations.
+- A local LLM (Ollama) writes a short risk explanation and a verification hint for each one, with a link to the matching Microsoft Learn doc.
+- A deterministic remediation engine patches the offending attributes and emits a unified diff.
+- The patched file gets re-scanned, and the report shows it now passes with 0 violations. That's the proof.
 
 ## Why it's different
 
-Plenty of tools now do "AI scans IaC and opens a PR." This one is built around three deliberate choices that most of them get wrong:
+Plenty of tools now do "AI scans IaC and opens a PR." This one makes three deliberate choices that most of them get wrong.
 
 ### 🔒 Local-first / private / zero-cost
-Everything runs on your machine via [Ollama](https://ollama.com). Your Terraform — which often encodes network topology, resource names, and security posture — **never gets sent to a third-party LLM API**. No per-review token bill, no data-egress risk. Most competitors send your IaC to a cloud API and warn you to strip secrets first.
+
+Everything runs on your machine via [Ollama](https://ollama.com). Your Terraform usually encodes network topology, resource names, and security posture, and none of it gets sent to a third-party LLM API. No per-review token bill, no data-egress risk. Most competitors send your IaC to a cloud API and tell you to strip secrets first.
 
 ### ✅ Provable remediation
-The fix isn't just generated — it's **verified**. The patched Terraform is re-evaluated against the exact same policy set, and the report demonstrates `0 violations`. A clean re-scan is hard evidence the fix is correct, not a hopeful "looks good to me."
+
+The fix isn't just generated, it's verified. The patched Terraform is re-evaluated against the same policy set, and the report shows `0 violations`. A clean re-scan is hard evidence the fix is correct, not a hopeful "looks good to me."
 
 ### 🎯 Deterministic fixes, AI for understanding
-The LLM **explains**; it does **not** write the fix. Remediation comes from a deterministic rule→attribute map, so it is reproducible and free of hallucinations. (Trade-off, stated honestly: this covers *unambiguous* fixes — "set TLS to 1.2", "disable public access". Context-dependent fixes like "which CIDR is allowed?" are left for human approval.)
+
+The LLM explains; it doesn't write the fix. Remediation comes from a deterministic rule→attribute map, so it's reproducible and free of hallucinations. That covers the unambiguous cases ("set TLS to 1.2", "disable public access"). Context-dependent ones, like "which CIDR is allowed?", are left for a human to approve.
 
 ## Architecture
 
@@ -100,18 +103,18 @@ make demo
 make test          # runs the OPA policy tests + the Python unit tests
 ```
 
-- **OPA** (`policies/**/*_test.rego`): every rule is asserted to fire on a
-  violating resource and stay silent on a compliant one, plus whole-policy checks
-  (fully-compliant → 0 denials, fully-insecure → all rules fire).
+- **OPA** (`policies/**/*_test.rego`): every rule is checked to fire on a violating
+  resource and stay silent on a compliant one, plus whole-policy checks (fully-compliant
+  → 0 denials, fully-insecure → all rules fire).
 - **pytest** (`tests/test_explainer.py`): unit tests for the parser, prompt builder,
-  deterministic remediator, and the async LLM fan-out — with the LLM **mocked**, so the
-  suite is fast, deterministic, and needs no network or Ollama.
+  deterministic remediator, and the async LLM fan-out. The LLM is mocked, so the suite is
+  fast, deterministic, and needs no network or Ollama.
 
 ## LLM backends (pluggable)
 
-The explainer is **local-first by default** (Ollama, `qwen2.5-coder:3b`) — nothing
-leaves your machine. If you'd rather use a hosted model, switch backend with one env
-var; the rest of the pipeline (scan, remediation, SARIF, verify) is unchanged.
+The explainer is local-first by default (Ollama, `qwen2.5-coder:3b`), so nothing leaves
+your machine. To use a hosted model instead, set one env var. The rest of the pipeline
+(scan, remediation, SARIF, verify) doesn't change.
 
 ```bash
 # default — local, private
@@ -131,9 +134,9 @@ export ANTHROPIC_API_KEY="..."
 make explain
 ```
 
-Backends live behind a small `LLMBackend` abstraction in `src/explainer.py`
-(`get_backend()` resolves `--backend`/`$LLM_BACKEND`), so adding another provider is
-one class. The unit tests mock this interface, so the suite never touches a real model.
+Backends sit behind a small `LLMBackend` abstraction in `src/explainer.py`
+(`get_backend()` resolves `--backend`/`$LLM_BACKEND`), so adding another provider is one
+class. The unit tests mock that interface, so the suite never touches a real model.
 
 ## What it catches today
 
@@ -210,39 +213,39 @@ The policy set is organised by resource category under `policies/<category>/`:
 |------|----------|--------|
 | `AZ-LOG-001` | medium | No query access over the public internet |
 
-> **Deterministic vs. human-judgement:** Storage and Key Vault findings have unambiguous
-> fixes that are auto-applied. The NSG "allow-any" rule has no single correct CIDR/port, so
-> the deterministic fix is **fail-closed** (`access = "Deny"`) — it closes the hole and leaves
-> the precise scoping to a human, exactly the boundary this tool is honest about.
+> **Deterministic vs. human judgement:** most findings have one unambiguous fix that gets
+> auto-applied. The NSG "allow-any" rule has no single correct CIDR or port, so its fix is
+> fail-closed (`access = "Deny"`): it shuts the hole and leaves the precise scoping to a
+> human. That's the boundary the tool is honest about.
 
-> **No cost, no risk:** the pipeline runs `terraform plan` only — it **never applies**. OPA evaluates the plan JSON, so no Azure resources are ever created.
+> **No cost, no risk:** the pipeline only runs `terraform plan`, never `apply`. OPA reads
+> the plan JSON, so no Azure resources are ever created.
 
 ## Continuous Integration
 
 `.github/workflows/policy-scan.yml` runs on every pull request and push to `main`:
 
-- **`tests` job** — runs the OPA policy tests and the Python unit tests.
-- **`policy-scan` job** — evaluates the policy set against a committed Terraform
-  plan fixture (`examples/insecure_plan.json`), then:
-  - converts the violations to **SARIF** (`scripts/opa_to_sarif.py`) and uploads them,
-    so findings appear in the repository's **Security ▸ Code scanning** tab with file
-    locations and severities;
-  - posts (and idempotently updates) a **PR comment** listing each violation and the
+- The **`tests` job** runs the OPA policy tests and the Python unit tests.
+- The **`policy-scan` job** evaluates the policy set against a committed Terraform plan
+  fixture (`examples/insecure_plan.json`), then:
+  - converts the violations to SARIF (`scripts/opa_to_sarif.py`) and uploads them, so
+    findings show up in the repo's **Security ▸ Code scanning** tab with file locations and
+    severities;
+  - posts a PR comment (updated in place, not duplicated) listing each violation and its
     deterministic fix.
 
-The CI is intentionally **cloud-free and LLM-free**: it scans a plan fixture rather
-than calling Azure, and the AI risk explanations stay a local `make explain` step —
-keeping the "your IaC never leaves your machine" guarantee true even in CI.
+The CI is cloud-free and LLM-free on purpose. It scans a plan fixture instead of calling
+Azure, and the AI explanations stay a local `make explain` step, so the "your IaC never
+leaves your machine" guarantee holds even in CI.
 
 ## Project layout
 
 ```
 .
-├── terraform/main.tf            # intentionally-insecure Azure baseline (storage + NSG + Key Vault)
-├── policies/                    # OPA policy set (Rego v1), by category
-│   ├── storage/                 #   AZ-STORAGE-00x (+ tests)
-│   ├── network/                 #   AZ-NSG-00x (+ tests)
-│   └── keyvault/                #   AZ-KV-00x (+ tests)
+├── terraform/main.tf            # intentionally-insecure Azure baseline (10 resource types)
+├── policies/                    # OPA policy set (Rego v1), one folder per category
+│   ├── storage/  network/  keyvault/  sql/  appservice/
+│   └── disk/  cosmos/  aks/  acr/  loganalytics/      # each: rules + tests
 ├── scripts/scan_iac.sh          # plan -> json -> opa eval pipeline
 ├── scripts/opa_to_sarif.py      # OPA violations -> SARIF (for the Security tab)
 ├── src/explainer.py             # local-LLM explainer + deterministic remediator
@@ -255,9 +258,9 @@ keeping the "your IaC never leaves your machine" guarantee true even in CI.
 
 - [x] Closed loop: scan → explain → remediate → **re-scan proves 0 violations**
 - [x] Parallel LLM calls (asyncio) + auto-remediation with unified diff
-- [x] OPA test suite (`policies/*_test.rego`) + pytest for the explainer (mocked LLM)
+- [x] OPA test suite (`policies/**/*_test.rego`) + pytest for the explainer (mocked LLM)
 - [x] GitHub Actions: policy scan on PRs → **SARIF export to the Security tab** + a PR comment with violations and deterministic fixes (cloud- and LLM-free)
-- [x] Broader policies (NSG open ports, Key Vault) organised by category
+- [x] Broader policies across 10 resource categories, organised by folder
 - [x] Pluggable LLM backend (Ollama · Azure OpenAI · Anthropic, via env var)
 
 ## License
