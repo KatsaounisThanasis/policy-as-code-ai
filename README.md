@@ -100,22 +100,46 @@ make demo
 make test          # runs the OPA policy tests + the Python unit tests
 ```
 
-- **OPA** (`policies/enforce_security_test.rego`): every rule is asserted to fire on a
+- **OPA** (`policies/**/*_test.rego`): every rule is asserted to fire on a
   violating resource and stay silent on a compliant one, plus whole-policy checks
-  (fully-compliant → 0 denials, fully-insecure → 5).
+  (fully-compliant → 0 denials, fully-insecure → all rules fire).
 - **pytest** (`tests/test_explainer.py`): unit tests for the parser, prompt builder,
   deterministic remediator, and the async LLM fan-out — with the LLM **mocked**, so the
   suite is fast, deterministic, and needs no network or Ollama.
 
-The LLM backend defaults to `qwen2.5-coder:3b`:
+## LLM backends (pluggable)
+
+The explainer is **local-first by default** (Ollama, `qwen2.5-coder:3b`) — nothing
+leaves your machine. If you'd rather use a hosted model, switch backend with one env
+var; the rest of the pipeline (scan, remediation, SARIF, verify) is unchanged.
 
 ```bash
+# default — local, private
 ollama pull qwen2.5-coder:3b
+make explain
+
+# Azure OpenAI
+export LLM_BACKEND=azureopenai
+export AZURE_OPENAI_ENDPOINT="https://<resource>.openai.azure.com"
+export AZURE_OPENAI_API_KEY="..."
+export AZURE_OPENAI_DEPLOYMENT="<deployment-name>"
+make explain
+
+# Anthropic
+export LLM_BACKEND=anthropic
+export ANTHROPIC_API_KEY="..."
+make explain
 ```
+
+Backends live behind a small `LLMBackend` abstraction in `src/explainer.py`
+(`get_backend()` resolves `--backend`/`$LLM_BACKEND`), so adding another provider is
+one class. The unit tests mock this interface, so the suite never touches a real model.
 
 ## What it catches today
 
-The bundled policy set targets Azure Storage Account misconfigurations:
+The policy set is organised by resource category under `policies/<category>/`:
+
+**Storage Account** (`policies/storage/`)
 
 | Rule | Severity | Checks |
 |------|----------|--------|
@@ -124,6 +148,72 @@ The bundled policy set targets Azure Storage Account misconfigurations:
 | `AZ-STORAGE-003` | high   | Public network access disabled |
 | `AZ-STORAGE-004` | medium | Minimum TLS version is `TLS1_2` |
 | `AZ-STORAGE-005` | high   | HTTPS-only traffic enforced |
+
+**Network Security Group** (`policies/network/`)
+
+| Rule | Severity | Checks |
+|------|----------|--------|
+| `AZ-NSG-001` | high   | No inbound `Allow` from a public source (`*`/`0.0.0.0/0`/`Internet`) to a sensitive/any port |
+| `AZ-NSG-002` | medium | No inbound rule opening **all** ports (`destination_port_range = "*"`) |
+
+**Key Vault** (`policies/keyvault/`)
+
+| Rule | Severity | Checks |
+|------|----------|--------|
+| `AZ-KV-001` | high | Purge protection enabled |
+| `AZ-KV-002` | high | Public network access disabled |
+
+**SQL Server** (`policies/sql/`)
+
+| Rule | Severity | Checks |
+|------|----------|--------|
+| `AZ-SQL-001` | high   | Public network access disabled |
+| `AZ-SQL-002` | medium | Minimum TLS version is `1.2` |
+
+**App Service** (`policies/appservice/`)
+
+| Rule | Severity | Checks |
+|------|----------|--------|
+| `AZ-APP-001` | high   | `https_only` enforced |
+| `AZ-APP-002` | medium | `site_config` minimum TLS version is `1.2` |
+
+**Managed Disk** (`policies/disk/`)
+
+| Rule | Severity | Checks |
+|------|----------|--------|
+| `AZ-DISK-001` | high   | Public network access disabled |
+| `AZ-DISK-002` | medium | Network access policy is not `AllowAll` |
+
+**Cosmos DB** (`policies/cosmos/`)
+
+| Rule | Severity | Checks |
+|------|----------|--------|
+| `AZ-COSMOS-001` | high | Public network access disabled |
+
+**AKS** (`policies/aks/`)
+
+| Rule | Severity | Checks |
+|------|----------|--------|
+| `AZ-AKS-001` | high   | Local accounts disabled |
+| `AZ-AKS-002` | medium | Azure Policy add-on enabled |
+
+**Container Registry** (`policies/acr/`)
+
+| Rule | Severity | Checks |
+|------|----------|--------|
+| `AZ-ACR-001` | high   | Admin user disabled |
+| `AZ-ACR-002` | medium | Public network access disabled |
+
+**Log Analytics** (`policies/loganalytics/`)
+
+| Rule | Severity | Checks |
+|------|----------|--------|
+| `AZ-LOG-001` | medium | No query access over the public internet |
+
+> **Deterministic vs. human-judgement:** Storage and Key Vault findings have unambiguous
+> fixes that are auto-applied. The NSG "allow-any" rule has no single correct CIDR/port, so
+> the deterministic fix is **fail-closed** (`access = "Deny"`) — it closes the hole and leaves
+> the precise scoping to a human, exactly the boundary this tool is honest about.
 
 > **No cost, no risk:** the pipeline runs `terraform plan` only — it **never applies**. OPA evaluates the plan JSON, so no Azure resources are ever created.
 
@@ -148,11 +238,16 @@ keeping the "your IaC never leaves your machine" guarantee true even in CI.
 
 ```
 .
-├── terraform/main.tf            # intentionally-insecure Azure baseline
-├── policies/enforce_security.rego  # OPA policy set (Rego v1)
+├── terraform/main.tf            # intentionally-insecure Azure baseline (storage + NSG + Key Vault)
+├── policies/                    # OPA policy set (Rego v1), by category
+│   ├── storage/                 #   AZ-STORAGE-00x (+ tests)
+│   ├── network/                 #   AZ-NSG-00x (+ tests)
+│   └── keyvault/                #   AZ-KV-00x (+ tests)
 ├── scripts/scan_iac.sh          # plan -> json -> opa eval pipeline
+├── scripts/opa_to_sarif.py      # OPA violations -> SARIF (for the Security tab)
 ├── src/explainer.py             # local-LLM explainer + deterministic remediator
-├── Makefile                     # scan / explain / remediate / demo / test
+├── examples/insecure_plan.json  # sanitized plan fixture used by CI
+├── Makefile                     # scan / explain / remediate / verify / demo / test
 └── .scan/                       # generated reports (sample output kept in repo)
 ```
 
@@ -162,8 +257,8 @@ keeping the "your IaC never leaves your machine" guarantee true even in CI.
 - [x] Parallel LLM calls (asyncio) + auto-remediation with unified diff
 - [x] OPA test suite (`policies/*_test.rego`) + pytest for the explainer (mocked LLM)
 - [x] GitHub Actions: policy scan on PRs → **SARIF export to the Security tab** + a PR comment with violations and deterministic fixes (cloud- and LLM-free)
-- [ ] Broader policies (NSG open ports, Key Vault) organised by category
-- [ ] Pluggable LLM backend (Ollama · Azure OpenAI · Anthropic, via env var)
+- [x] Broader policies (NSG open ports, Key Vault) organised by category
+- [x] Pluggable LLM backend (Ollama · Azure OpenAI · Anthropic, via env var)
 
 ## License
 

@@ -101,22 +101,51 @@ def test_unified_diff_str():
     assert "-line 2" in diff
     assert "+line 3" in diff
 
-def test_explain_all(monkeypatch):
-    def mock_call(model, system, user, timeout):
+class _MockBackend(explainer.LLMBackend):
+    name = "mock"
+    model = "mock-model"
+
+    def complete_sync(self, system, user, timeout):
         if "fail_res" in user:
             raise Exception("Mock timeout")
-        return f"Response for {model}"
+        return f"Response for {self.model}"
 
-    monkeypatch.setattr(explainer, "_call_ollama_sync", mock_call)
 
+def test_explain_all():
     violations = [
         {"resource": "res1"},
         {"resource": "fail_res"},
     ]
-    
-    results = asyncio.run(explainer.explain_all(violations, "mock-model", 10))
-    
+
+    results = asyncio.run(explainer.explain_all(violations, _MockBackend(), 10))
+
     assert len(results) == 2
     assert results[0] == "Response for mock-model"
     assert "_LLM call failed:" in results[1]
     assert "Mock timeout" in results[1]
+
+
+def test_get_backend_default_is_ollama(monkeypatch):
+    monkeypatch.delenv("LLM_BACKEND", raising=False)
+    backend = explainer.get_backend()
+    assert backend.name == "ollama"
+    assert backend.model == explainer.DEFAULT_MODEL
+
+
+def test_get_backend_explicit_overrides_env(monkeypatch):
+    monkeypatch.setenv("LLM_BACKEND", "anthropic")  # should be overridden by arg
+    backend = explainer.get_backend("ollama", "custom-model")
+    assert backend.name == "ollama"
+    assert backend.model == "custom-model"
+
+
+def test_get_backend_unknown_exits():
+    with pytest.raises(SystemExit):
+        explainer.get_backend("does-not-exist")
+
+
+def test_azureopenai_backend_requires_env(monkeypatch):
+    for var in ("AZURE_OPENAI_ENDPOINT", "AZURE_OPENAI_API_KEY", "AZURE_OPENAI_DEPLOYMENT"):
+        monkeypatch.delenv(var, raising=False)
+    with pytest.raises(SystemExit):
+        explainer.get_backend("azureopenai")

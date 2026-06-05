@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TF_DIR="${REPO_ROOT}/terraform"
-POLICY_FILE="${REPO_ROOT}/policies/enforce_security.rego"
+POLICY_DIR="${REPO_ROOT}/policies"
 OUT_DIR="${REPO_ROOT}/.scan"
 PLAN_BIN="${OUT_DIR}/tfplan"
 PLAN_JSON="${OUT_DIR}/tfplan.json"
@@ -53,7 +53,7 @@ echo "${BOLD}Converting plan to JSON...${RESET}"
 (cd "$TF_DIR" && terraform show -json "$PLAN_BIN" > "$PLAN_JSON")
 
 echo "${BOLD}Evaluating OPA policies...${RESET}"
-opa eval --format=json -i "$PLAN_JSON" -d "$POLICY_FILE" 'data.terraform.security.deny' > "$VIOLATIONS_JSON"
+opa eval --format=json -i "$PLAN_JSON" -d "$POLICY_DIR" 'data.terraform.security.deny' > "$VIOLATIONS_JSON"
 
 violation_count="$(jq '.result[0].expressions[0].value | length' "$VIOLATIONS_JSON")"
 

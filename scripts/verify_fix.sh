@@ -12,7 +12,7 @@ export ARM_SUBSCRIPTION_ID
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 TF_DIR="${REPO_ROOT}/terraform"
-POLICY_FILE="${REPO_ROOT}/policies/enforce_security.rego"
+POLICY_DIR="${REPO_ROOT}/policies"
 OUT_DIR="${REPO_ROOT}/.scan"
 FIXED="${OUT_DIR}/main_fixed.tf"
 MAIN="${TF_DIR}/main.tf"
@@ -50,7 +50,7 @@ if ! (cd "$TF_DIR" && timeout 120 terraform plan -out="$PLAN_BIN" -input=false -
   exit 1
 fi
 (cd "$TF_DIR" && terraform show -json "$PLAN_BIN" > "$PLAN_JSON")
-opa eval --format=json -i "$PLAN_JSON" -d "$POLICY_FILE" 'data.terraform.security.deny' > "$VIOLATIONS_JSON"
+opa eval --format=json -i "$PLAN_JSON" -d "$POLICY_DIR" 'data.terraform.security.deny' > "$VIOLATIONS_JSON"
 
 count="$(jq '.result[0].expressions[0].value | length' "$VIOLATIONS_JSON")"
 

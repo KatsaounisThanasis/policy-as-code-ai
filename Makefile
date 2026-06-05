@@ -92,7 +92,7 @@ gif: ## Record the demo into demo/demo.gif (needs vhs + ollama + az login)
 
 test: ## Run OPA tests and pytest if any exist
 	@has_tests=0; \
-	if ls policies/*_test.rego >/dev/null 2>&1; then \
+	if [ -n "$$(find policies -name '*_test.rego' 2>/dev/null | head -n 1)" ]; then \
 	  has_tests=1; \
 	  opa test policies/; \
 	fi; \

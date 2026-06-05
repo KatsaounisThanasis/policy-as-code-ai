@@ -5,6 +5,102 @@
         {
           "value": [
             {
+              "message": "AKS Azure Policy add-on is disabled. Set 'azure_policy_enabled' to true.",
+              "resource": "azurerm_kubernetes_cluster.aks",
+              "rule": "AZ-AKS-002",
+              "severity": "medium"
+            },
+            {
+              "message": "AKS local accounts are enabled. Set 'local_account_disabled' to true.",
+              "resource": "azurerm_kubernetes_cluster.aks",
+              "rule": "AZ-AKS-001",
+              "severity": "high"
+            },
+            {
+              "message": "App Service does not enforce HTTPS. Set 'https_only' to true.",
+              "resource": "azurerm_linux_web_app.app",
+              "rule": "AZ-APP-001",
+              "severity": "high"
+            },
+            {
+              "message": "App Service minimum TLS version is not 1.2. Set site_config 'minimum_tls_version' to '1.2'.",
+              "resource": "azurerm_linux_web_app.app",
+              "rule": "AZ-APP-002",
+              "severity": "medium"
+            },
+            {
+              "message": "Container Registry admin user is enabled. Set 'admin_enabled' to false.",
+              "resource": "azurerm_container_registry.acr",
+              "rule": "AZ-ACR-001",
+              "severity": "high"
+            },
+            {
+              "message": "Container Registry allows public network access. Set 'public_network_access_enabled' to false.",
+              "resource": "azurerm_container_registry.acr",
+              "rule": "AZ-ACR-002",
+              "severity": "medium"
+            },
+            {
+              "message": "Cosmos DB allows public network access. Set 'public_network_access_enabled' to false.",
+              "resource": "azurerm_cosmosdb_account.cosmos",
+              "rule": "AZ-COSMOS-001",
+              "severity": "high"
+            },
+            {
+              "message": "Key Vault allows public network access. Set 'public_network_access_enabled' to false.",
+              "resource": "azurerm_key_vault.kv",
+              "rule": "AZ-KV-002",
+              "severity": "high"
+            },
+            {
+              "message": "Key Vault purge protection is disabled. Set 'purge_protection_enabled' to true.",
+              "resource": "azurerm_key_vault.kv",
+              "rule": "AZ-KV-001",
+              "severity": "high"
+            },
+            {
+              "message": "Log Analytics workspace allows queries over the public internet. Set 'internet_query_enabled' to false.",
+              "resource": "azurerm_log_analytics_workspace.law",
+              "rule": "AZ-LOG-001",
+              "severity": "medium"
+            },
+            {
+              "message": "Managed Disk allows public network access. Set 'public_network_access_enabled' to false.",
+              "resource": "azurerm_managed_disk.disk",
+              "rule": "AZ-DISK-001",
+              "severity": "high"
+            },
+            {
+              "message": "Managed Disk network access policy is AllowAll. Set 'network_access_policy' to 'DenyAll'.",
+              "resource": "azurerm_managed_disk.disk",
+              "rule": "AZ-DISK-002",
+              "severity": "medium"
+            },
+            {
+              "message": "NSG rule allows inbound access from a public source to a sensitive or unrestricted port. Restrict 'source_address_prefix' and 'destination_port_range'.",
+              "resource": "azurerm_network_security_rule.bad_any",
+              "rule": "AZ-NSG-001",
+              "severity": "high"
+            },
+            {
+              "message": "NSG rule opens all destination ports ('*') to inbound traffic. Restrict 'destination_port_range' to specific ports.",
+              "resource": "azurerm_network_security_rule.bad_any",
+              "rule": "AZ-NSG-002",
+              "severity": "medium"
+            },
+            {
+              "message": "SQL Server allows public network access. Set 'public_network_access_enabled' to false.",
+              "resource": "azurerm_mssql_server.sql",
+              "rule": "AZ-SQL-001",
+              "severity": "high"
+            },
+            {
+              "message": "SQL Server minimum TLS version is not 1.2. Set 'minimum_tls_version' to '1.2'.",
+              "resource": "azurerm_mssql_server.sql",
+              "rule": "AZ-SQL-002",
+              "severity": "medium"
+            },
+            {
               "message": "Storage account allows nested items to be public. Set 'allow_nested_items_to_be_public' to false.",
               "resource": "azurerm_storage_account.sa",
               "rule": "AZ-STORAGE-001",

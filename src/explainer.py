@@ -30,6 +30,7 @@ import argparse
 import asyncio
 import difflib
 import json
+import os
 import re
 import sys
 import urllib.error
@@ -48,6 +49,22 @@ DOCS: dict[str, str] = {
     "AZ-STORAGE-003": "https://learn.microsoft.com/azure/storage/common/storage-network-security",
     "AZ-STORAGE-004": "https://learn.microsoft.com/azure/storage/common/transport-layer-security-configure-minimum-version",
     "AZ-STORAGE-005": "https://learn.microsoft.com/azure/storage/common/storage-require-secure-transfer",
+    "AZ-NSG-001": "https://learn.microsoft.com/azure/virtual-network/network-security-groups-overview",
+    "AZ-NSG-002": "https://learn.microsoft.com/azure/virtual-network/network-security-groups-overview",
+    "AZ-KV-001": "https://learn.microsoft.com/azure/key-vault/general/soft-delete-overview",
+    "AZ-KV-002": "https://learn.microsoft.com/azure/key-vault/general/network-security",
+    "AZ-SQL-001": "https://learn.microsoft.com/azure/azure-sql/database/network-access-controls-overview",
+    "AZ-SQL-002": "https://learn.microsoft.com/azure/azure-sql/database/connectivity-settings",
+    "AZ-APP-001": "https://learn.microsoft.com/azure/app-service/configure-ssl-bindings",
+    "AZ-APP-002": "https://learn.microsoft.com/azure/app-service/configure-ssl-bindings",
+    "AZ-DISK-001": "https://learn.microsoft.com/azure/virtual-machines/disks-restrict-import-export-overview",
+    "AZ-DISK-002": "https://learn.microsoft.com/azure/virtual-machines/disks-restrict-import-export-overview",
+    "AZ-COSMOS-001": "https://learn.microsoft.com/azure/cosmos-db/how-to-configure-firewall",
+    "AZ-AKS-001": "https://learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad",
+    "AZ-AKS-002": "https://learn.microsoft.com/azure/aks/use-azure-policy",
+    "AZ-ACR-001": "https://learn.microsoft.com/azure/container-registry/container-registry-authentication",
+    "AZ-ACR-002": "https://learn.microsoft.com/azure/container-registry/container-registry-access-selected-networks",
+    "AZ-LOG-001": "https://learn.microsoft.com/azure/azure-monitor/logs/private-link-security",
 }
 
 # Deterministic remediation: rule id -> { attribute_name: new_value_as_hcl_literal }.
@@ -59,6 +76,25 @@ REMEDIATIONS: dict[str, dict[str, str]] = {
     "AZ-STORAGE-003": {"public_network_access_enabled": "false"},
     "AZ-STORAGE-004": {"min_tls_version": '"TLS1_2"'},
     "AZ-STORAGE-005": {"https_traffic_only_enabled": "true"},
+    # NSG: an allow-any-inbound rule has no single "correct" CIDR/port, so the
+    # deterministic, fail-closed fix is to deny it until a human scopes it.
+    # Flipping access to Deny clears both AZ-NSG-001 and AZ-NSG-002.
+    "AZ-NSG-001": {"access": '"Deny"'},
+    "AZ-NSG-002": {"access": '"Deny"'},
+    "AZ-KV-001": {"purge_protection_enabled": "true"},
+    "AZ-KV-002": {"public_network_access_enabled": "false"},
+    "AZ-SQL-001": {"public_network_access_enabled": "false"},
+    "AZ-SQL-002": {"minimum_tls_version": '"1.2"'},
+    "AZ-APP-001": {"https_only": "true"},
+    "AZ-APP-002": {"minimum_tls_version": '"1.2"'},
+    "AZ-DISK-001": {"public_network_access_enabled": "false"},
+    "AZ-DISK-002": {"network_access_policy": '"DenyAll"'},
+    "AZ-COSMOS-001": {"public_network_access_enabled": "false"},
+    "AZ-AKS-001": {"local_account_disabled": "true"},
+    "AZ-AKS-002": {"azure_policy_enabled": "true"},
+    "AZ-ACR-001": {"admin_enabled": "false"},
+    "AZ-ACR-002": {"public_network_access_enabled": "false"},
+    "AZ-LOG-001": {"internet_query_enabled": "false"},
 }
 
 SYSTEM_PROMPT = """You are a senior cloud security engineer reviewing an Azure Terraform plan.
@@ -80,11 +116,30 @@ Rules: be precise, no filler, no preamble, no closing remarks. Output only the t
 
 
 # ---------------------------------------------------------------------------
-# LLM (Ollama) calls
+# LLM backends — pluggable via the LLM_BACKEND env var (default: ollama)
+#
+#   LLM_BACKEND=ollama        (default)  -> local Ollama; nothing leaves the box
+#   LLM_BACKEND=azureopenai              -> Azure OpenAI Chat Completions
+#   LLM_BACKEND=anthropic                -> Anthropic Messages API
+#
+# Each backend turns a (system, user) prompt into plain text. Everything else
+# (scan, remediation, SARIF, verify) is backend-agnostic. Local-first by
+# default; bring-your-own cloud API only if you opt in.
 # ---------------------------------------------------------------------------
 
+def _post_json(url: str, payload: dict, headers: dict, timeout: int) -> dict:
+    """POST a JSON body and return the decoded JSON response."""
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json", **headers},
+    )
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read())
+
+
 def _call_ollama_sync(model: str, system: str, user: str, timeout: int) -> str:
-    """Blocking call to Ollama /api/generate, used by the async wrapper."""
+    """Blocking call to Ollama /api/generate."""
     payload = {
         "model": model,
         "system": system,
@@ -92,30 +147,117 @@ def _call_ollama_sync(model: str, system: str, user: str, timeout: int) -> str:
         "stream": False,
         "options": {"temperature": 0.2, "num_predict": 512},
     }
-    req = urllib.request.Request(
-        OLLAMA_URL,
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
-    )
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
+        data = _post_json(OLLAMA_URL, payload, {}, timeout)
     except urllib.error.URLError as exc:
         raise RuntimeError(f"Ollama API unreachable at {OLLAMA_URL}: {exc}") from exc
     return data.get("response", "").strip()
 
 
-async def call_ollama_async(model: str, system: str, user: str, timeout: int) -> str:
-    """Async wrapper: runs the blocking urllib call in a thread."""
-    return await asyncio.to_thread(_call_ollama_sync, model, system, user, timeout)
+class LLMBackend:
+    """A backend turns a (system, user) prompt into text, synchronously."""
+
+    name = "base"
+    model = ""
+
+    def complete_sync(self, system: str, user: str, timeout: int) -> str:
+        raise NotImplementedError
+
+
+class OllamaBackend(LLMBackend):
+    name = "ollama"
+
+    def __init__(self, model: str | None = None) -> None:
+        self.model = model or DEFAULT_MODEL
+
+    def complete_sync(self, system: str, user: str, timeout: int) -> str:
+        return _call_ollama_sync(self.model, system, user, timeout)
+
+
+class AzureOpenAIBackend(LLMBackend):
+    name = "azureopenai"
+
+    def __init__(self, model: str | None = None) -> None:
+        self.endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "").rstrip("/")
+        self.api_key = os.environ.get("AZURE_OPENAI_API_KEY", "")
+        self.model = model or os.environ.get("AZURE_OPENAI_DEPLOYMENT", "")
+        self.api_version = os.environ.get("AZURE_OPENAI_API_VERSION", "2024-06-01")
+        missing = [
+            n for n, v in (
+                ("AZURE_OPENAI_ENDPOINT", self.endpoint),
+                ("AZURE_OPENAI_API_KEY", self.api_key),
+                ("AZURE_OPENAI_DEPLOYMENT", self.model),
+            ) if not v
+        ]
+        if missing:
+            sys.exit(f"azureopenai backend needs env var(s): {', '.join(missing)}")
+
+    def complete_sync(self, system: str, user: str, timeout: int) -> str:
+        url = (
+            f"{self.endpoint}/openai/deployments/{self.model}"
+            f"/chat/completions?api-version={self.api_version}"
+        )
+        payload = {
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 512,
+        }
+        data = _post_json(url, payload, {"api-key": self.api_key}, timeout)
+        return data["choices"][0]["message"]["content"].strip()
+
+
+class AnthropicBackend(LLMBackend):
+    name = "anthropic"
+    DEFAULT_ANTHROPIC_MODEL = "claude-3-5-sonnet-latest"
+
+    def __init__(self, model: str | None = None) -> None:
+        self.api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        self.model = model or os.environ.get("ANTHROPIC_MODEL", self.DEFAULT_ANTHROPIC_MODEL)
+        if not self.api_key:
+            sys.exit("anthropic backend needs env var: ANTHROPIC_API_KEY")
+
+    def complete_sync(self, system: str, user: str, timeout: int) -> str:
+        payload = {
+            "model": self.model,
+            "max_tokens": 512,
+            "temperature": 0.2,
+            "system": system,
+            "messages": [{"role": "user", "content": user}],
+        }
+        headers = {"x-api-key": self.api_key, "anthropic-version": "2023-06-01"}
+        data = _post_json("https://api.anthropic.com/v1/messages", payload, headers, timeout)
+        return "".join(block.get("text", "") for block in data.get("content", [])).strip()
+
+
+_BACKENDS: dict[str, type[LLMBackend]] = {
+    "ollama": OllamaBackend,
+    "azureopenai": AzureOpenAIBackend,
+    "azure": AzureOpenAIBackend,
+    "anthropic": AnthropicBackend,
+}
+
+
+def get_backend(name: str | None = None, model: str | None = None) -> LLMBackend:
+    """Resolve a backend from an explicit name, else $LLM_BACKEND, else ollama."""
+    key = (name or os.environ.get("LLM_BACKEND") or "ollama").lower()
+    cls = _BACKENDS.get(key)
+    if cls is None:
+        choices = ", ".join(sorted(set(_BACKENDS)))
+        sys.exit(f"Unknown LLM backend '{key}'. Choose one of: {choices}.")
+    return cls(model)
 
 
 async def explain_all(
-    violations: list[dict[str, Any]], model: str, timeout: int
+    violations: list[dict[str, Any]], backend: LLMBackend, timeout: int
 ) -> list[str]:
-    """Run all LLM calls in parallel and return responses in the same order."""
+    """Run all backend calls in parallel and return responses in the same order."""
     tasks = [
-        call_ollama_async(model, SYSTEM_PROMPT, build_user_prompt(v), timeout)
+        asyncio.to_thread(
+            backend.complete_sync, SYSTEM_PROMPT, build_user_prompt(v), timeout
+        )
         for v in violations
     ]
     results: list[str] = []
@@ -219,14 +361,18 @@ async def _async_main(args: argparse.Namespace) -> int:
         print("No violations to explain. All clear.")
         return 0
 
-    print(f"Found {len(violations)} violation(s). Querying {args.model} in parallel...\n")
+    backend = get_backend(args.backend, args.model)
+    print(
+        f"Found {len(violations)} violation(s). "
+        f"Querying `{backend.model}` via {backend.name} in parallel...\n"
+    )
 
-    answers = await explain_all(violations, args.model, args.timeout)
+    answers = await explain_all(violations, backend, args.timeout)
 
     md_parts: list[str] = [
         "# AI Drift Explainer Report",
         "",
-        f"_Model: `{args.model}` via Ollama. Source: `{args.input}`._",
+        f"_Model: `{backend.model}` via {backend.name}. Source: `{args.input}`._",
     ]
 
     for idx, (v, answer) in enumerate(zip(violations, answers), 1):
@@ -298,8 +444,12 @@ def main() -> int:
                     help="Path to OPA eval JSON output (default: .scan/violations.json)")
     ap.add_argument("--output", "-o", type=Path, default=Path(".scan/explanations.md"),
                     help="Path to write the markdown report (default: .scan/explanations.md)")
-    ap.add_argument("--model", "-m", default=DEFAULT_MODEL,
-                    help=f"Ollama model name (default: {DEFAULT_MODEL})")
+    ap.add_argument("--backend", default=None,
+                    help="LLM backend: ollama | azureopenai | anthropic "
+                         "(default: $LLM_BACKEND, else ollama)")
+    ap.add_argument("--model", "-m", default=None,
+                    help="Model / deployment name (backend-specific; "
+                         f"defaults per backend, e.g. {DEFAULT_MODEL} for ollama)")
     ap.add_argument("--timeout", type=int, default=180,
                     help="Per-request timeout in seconds (default: 180)")
     ap.add_argument("--remediate", action="store_true",

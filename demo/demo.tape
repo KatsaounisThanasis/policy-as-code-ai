@@ -29,7 +29,7 @@ Sleep 15s
 Type "#  2. AI explains WHY each is risky, then a deterministic engine fixes it" Enter
 Sleep 700ms
 Type "python3 src/explainer.py --remediate" Enter
-Sleep 42s
+Sleep 75s
 
 # --- 3. PROOF: re-scan the fixed Terraform -> 0 violations ---
 Type "#  3. Proof: re-scan the remediated Terraform against the same gate" Enter
