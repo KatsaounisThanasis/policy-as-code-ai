@@ -5,7 +5,7 @@
 
 ![Policy as Code](https://img.shields.io/badge/policy--as--code-OPA%2FRego-7D4698)
 ![Terraform](https://img.shields.io/badge/IaC-Terraform-844FBA)
-![LLM](https://img.shields.io/badge/LLM-local%20(Ollama)-000000)
+![LLM](https://img.shields.io/badge/LLM-local-000000)
 ![Cloud](https://img.shields.io/badge/cloud-Azure-0078D4)
 [![Policy-as-Code CI](https://github.com/KatsaounisThanasis/policy-as-code-ai/actions/workflows/policy-scan.yml/badge.svg)](https://github.com/KatsaounisThanasis/policy-as-code-ai/actions/workflows/policy-scan.yml)
 ![License](https://img.shields.io/badge/license-MIT-green)
@@ -34,7 +34,7 @@ terraform plan ─▶ OPA/Rego scan ─▶ AI explains each violation ─▶ det
 ```
 
 - OPA/Rego evaluates the Terraform plan and emits structured violations.
-- A local LLM (Ollama) writes a short risk explanation and a verification hint for each one, with a link to the matching Microsoft Learn doc.
+- A local LLM writes a short risk explanation and a verification hint for each one, with a link to the matching Microsoft Learn doc.
 - A deterministic remediation engine patches the offending attributes and emits a unified diff.
 - The patched file gets re-scanned, and the report shows it now passes with 0 violations. That's the proof.
 
@@ -44,7 +44,7 @@ Plenty of tools now do "AI scans IaC and opens a PR." This one makes three delib
 
 ### 🔒 Local-first / private / zero-cost
 
-Everything runs on your machine via [Ollama](https://ollama.com). Your Terraform usually encodes network topology, resource names, and security posture, and none of it gets sent to a third-party LLM API. No per-review token bill, no data-egress risk. Most competitors send your IaC to a cloud API and tell you to strip secrets first.
+Everything runs on your machine via a local LLM. Your Terraform usually encodes network topology, resource names, and security posture, and none of it gets sent to a third-party LLM API. No per-review token bill, no data-egress risk. Most competitors send your IaC to a cloud API and tell you to strip secrets first.
 
 ### ✅ Provable remediation
 
@@ -63,7 +63,7 @@ flowchart LR
     OPA -->|violations.json| EXP["explainer.py"]
 
     subgraph LOCAL["100% local"]
-        EXP -->|parallel calls| OLLAMA[("Ollama LLM<br/>qwen2.5-coder")]
+        EXP -->|parallel calls| OLLAMA[("local LLM<br/>(on your machine)")]
         OLLAMA --> EXP
     end
 
@@ -77,7 +77,7 @@ flowchart LR
 
 ## Quick start
 
-**Prerequisites:** `terraform`, `opa`, `jq`, `az` (logged in), `ollama` (with a code model pulled), `python3`.
+**Prerequisites:** `terraform`, `opa`, `jq`, `az` (logged in), a local LLM runtime (Ollama by default), `python3`.
 
 ```bash
 # 0. verify your toolchain
@@ -110,7 +110,7 @@ make test          # runs the OPA policy tests + the Python unit tests
   → 0 denials, fully-insecure → all rules fire).
 - **pytest** (`tests/test_explainer.py`): unit tests for the parser, prompt builder,
   deterministic remediator, and the async LLM fan-out. The LLM is mocked, so the suite is
-  fast, deterministic, and needs no network or Ollama.
+  fast, deterministic, and needs no network or local model.
 
 ## LLM backends (pluggable)
 
