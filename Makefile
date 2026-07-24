@@ -21,7 +21,7 @@ YELLOW :=
 CYAN :=
 endif
 
-.PHONY: help tools-check az-login-check scan explain remediate verify demo test clean clean-all gif
+.PHONY: help tools-check az-login-check scan scan-offline explain remediate verify demo test clean clean-all gif rules-doc
 
 help: ## Show available targets
 	@awk 'BEGIN {FS = ":.*##"; printf "%sAvailable targets:%s\n", "$(BOLD)", "$(RESET)"} /^[a-zA-Z0-9_.-]+:.*##/ {printf "  %s%-20s%s %s\n", "$(CYAN)", $$1, "$(RESET)", $$2}' $(MAKEFILE_LIST)
@@ -59,6 +59,22 @@ scan: tools-check ## Run terraform plan and OPA scan (exit 2 is expected)
 	  fi; \
 	  exit $$status; \
 	fi
+
+scan-offline: ## Scan the bundled example plan with OPA only (no terraform, no Azure)
+	@if ./scripts/scan_iac.sh --plan-json examples/insecure_plan.json; then \
+	  exit 0; \
+	else \
+	  status=$$?; \
+	  if [ $$status -eq 2 ]; then \
+	    printf "%sViolations detected (expected).%s\n" "$(YELLOW)" "$(RESET)"; \
+	    exit 0; \
+	  fi; \
+	  exit $$status; \
+	fi
+
+rules-doc: ## Regenerate RULES.md from rules.json (single source of truth)
+	@python3 scripts/gen_rules_doc.py --output RULES.md
+	@printf "%sWrote RULES.md%s\n" "$(GREEN)" "$(RESET)"
 
 explain: ## Generate explanations from .scan/violations.json
 	@if [ ! -f .scan/violations.json ]; then \

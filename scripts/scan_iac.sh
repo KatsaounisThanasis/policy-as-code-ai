@@ -32,25 +32,48 @@ require_cmd() {
   fi
 }
 
-require_cmd terraform
+# Offline mode: scan a pre-generated `terraform show -json` plan directly, with
+# no terraform and no Azure credentials. Pass --plan-json PATH (or set
+# PLAN_JSON_IN). This is what lets anyone try the tool in seconds against the
+# bundled examples/insecure_plan.json — no cloud account required.
+PLAN_JSON_IN="${PLAN_JSON_IN:-}"
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --plan-json) PLAN_JSON_IN="${2:?--plan-json needs a path}"; shift 2 ;;
+    --plan-json=*) PLAN_JSON_IN="${1#*=}"; shift ;;
+    -h|--help) echo "usage: scan_iac.sh [--plan-json <plan.json>]"; exit 0 ;;
+    *) echo "${RED}Unknown argument: $1${RESET}" >&2; exit 1 ;;
+  esac
+done
+
 require_cmd opa
 require_cmd jq
 
 mkdir -p "$OUT_DIR"
 
-if [ ! -d "${TF_DIR}/.terraform" ]; then
-  echo "${BOLD}Initializing Terraform...${RESET}"
-  (cd "$TF_DIR" && terraform init -input=false -upgrade)
-fi
+if [ -n "$PLAN_JSON_IN" ]; then
+  if [ ! -f "$PLAN_JSON_IN" ]; then
+    echo "${RED}Error: plan JSON not found: ${PLAN_JSON_IN}.${RESET}" >&2
+    exit 1
+  fi
+  echo "${BOLD}Offline mode: scanning ${PLAN_JSON_IN} (no terraform, no Azure).${RESET}"
+  cp "$PLAN_JSON_IN" "$PLAN_JSON"
+else
+  require_cmd terraform
+  if [ ! -d "${TF_DIR}/.terraform" ]; then
+    echo "${BOLD}Initializing Terraform...${RESET}"
+    (cd "$TF_DIR" && terraform init -input=false -upgrade)
+  fi
 
-echo "${BOLD}Running terraform plan...${RESET}"
-if ! (cd "$TF_DIR" && terraform plan -out="$PLAN_BIN" -input=false -lock=false); then
-  echo "${RED}Error: terraform plan failed. Ensure Azure auth env vars are set (ARM_SUBSCRIPTION_ID, ARM_TENANT_ID, ARM_CLIENT_ID, ARM_CLIENT_SECRET) or run 'az login'.${RESET}" >&2
-  exit 1
-fi
+  echo "${BOLD}Running terraform plan...${RESET}"
+  if ! (cd "$TF_DIR" && terraform plan -out="$PLAN_BIN" -input=false -lock=false); then
+    echo "${RED}Error: terraform plan failed. Ensure Azure auth env vars are set (ARM_SUBSCRIPTION_ID, ARM_TENANT_ID, ARM_CLIENT_ID, ARM_CLIENT_SECRET) or run 'az login'.${RESET}" >&2
+    exit 1
+  fi
 
-echo "${BOLD}Converting plan to JSON...${RESET}"
-(cd "$TF_DIR" && terraform show -json "$PLAN_BIN" > "$PLAN_JSON")
+  echo "${BOLD}Converting plan to JSON...${RESET}"
+  (cd "$TF_DIR" && terraform show -json "$PLAN_BIN" > "$PLAN_JSON")
+fi
 
 echo "${BOLD}Evaluating OPA policies...${RESET}"
 opa eval --format=json -i "$PLAN_JSON" -d "$POLICY_DIR" 'data.terraform.security.deny' > "$VIOLATIONS_JSON"

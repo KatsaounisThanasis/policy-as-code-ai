@@ -1,0 +1,29 @@
+# Policy Catalog
+
+> Auto-generated from [`rules.json`](rules.json) by `make rules-doc` — do not edit by hand.
+
+**21 rules across 10 Azure services.** Each rule is enforced by a Rego policy under `policies/`, carries a deterministic remediation, and links to the canonical Microsoft Learn guidance.
+
+| Rule | Sev | Service | Check | Deterministic fix | Docs |
+| --- | --- | --- | --- | --- | --- |
+| `AZ-STORAGE-001` | high | Storage Account | Storage account allows nested items to be public. Set 'allow_nested_items_to_be_public' to false. | `allow_nested_items_to_be_public = false` | [ref](https://learn.microsoft.com/azure/storage/blobs/anonymous-read-access-prevent) |
+| `AZ-STORAGE-002` | medium | Storage Account | Storage account has shared access key enabled. Set 'shared_access_key_enabled' to false. | `shared_access_key_enabled = false` | [ref](https://learn.microsoft.com/azure/storage/common/shared-key-authorization-prevent) |
+| `AZ-STORAGE-003` | high | Storage Account | Storage account has public network access enabled. Set 'public_network_access_enabled' to false. | `public_network_access_enabled = false` | [ref](https://learn.microsoft.com/azure/storage/common/storage-network-security) |
+| `AZ-STORAGE-004` | medium | Storage Account | Storage account minimum TLS version is not TLS1_2. Set 'min_tls_version' to 'TLS1_2'. | `min_tls_version = "TLS1_2"` | [ref](https://learn.microsoft.com/azure/storage/common/transport-layer-security-configure-minimum-version) |
+| `AZ-STORAGE-005` | high | Storage Account | Storage account does not require HTTPS traffic. Set 'https_traffic_only_enabled' to true. | `https_traffic_only_enabled = true` | [ref](https://learn.microsoft.com/azure/storage/common/storage-require-secure-transfer) |
+| `AZ-NSG-001` | high | Network Security Group | NSG rule allows inbound access from a public source to a sensitive or unrestricted port. Restrict 'source_address_prefix' and 'destination_port_range'. | `access = "Deny"  (fail-closed; scope source/port before re-enabling)` | [ref](https://learn.microsoft.com/azure/virtual-network/network-security-groups-overview) |
+| `AZ-NSG-002` | medium | Network Security Group | NSG rule opens all destination ports ('*') to inbound traffic. Restrict 'destination_port_range' to specific ports. | `access = "Deny"  (fail-closed; restrict destination_port_range)` | [ref](https://learn.microsoft.com/azure/virtual-network/network-security-groups-overview) |
+| `AZ-KV-001` | high | Key Vault | Key Vault purge protection is disabled. Set 'purge_protection_enabled' to true. | `purge_protection_enabled = true` | [ref](https://learn.microsoft.com/azure/key-vault/general/soft-delete-overview) |
+| `AZ-KV-002` | high | Key Vault | Key Vault allows public network access. Set 'public_network_access_enabled' to false. | `public_network_access_enabled = false` | [ref](https://learn.microsoft.com/azure/key-vault/general/network-security) |
+| `AZ-SQL-001` | high | SQL Server | SQL Server allows public network access. Set 'public_network_access_enabled' to false. | `public_network_access_enabled = false` | [ref](https://learn.microsoft.com/azure/azure-sql/database/network-access-controls-overview) |
+| `AZ-SQL-002` | medium | SQL Server | SQL Server minimum TLS version is not 1.2. Set 'minimum_tls_version' to '1.2'. | `minimum_tls_version = "1.2"` | [ref](https://learn.microsoft.com/azure/azure-sql/database/connectivity-settings) |
+| `AZ-APP-001` | high | App Service | App Service does not enforce HTTPS. Set 'https_only' to true. | `https_only = true` | [ref](https://learn.microsoft.com/azure/app-service/configure-ssl-bindings) |
+| `AZ-APP-002` | medium | App Service | App Service minimum TLS version is not 1.2. Set site_config 'minimum_tls_version' to '1.2'. | `site_config.minimum_tls_version = "1.2"` | [ref](https://learn.microsoft.com/azure/app-service/configure-ssl-bindings) |
+| `AZ-DISK-001` | high | Managed Disk | Managed Disk allows public network access. Set 'public_network_access_enabled' to false. | `public_network_access_enabled = false` | [ref](https://learn.microsoft.com/azure/virtual-machines/disks-restrict-import-export-overview) |
+| `AZ-DISK-002` | medium | Managed Disk | Managed Disk network access policy is AllowAll. Set 'network_access_policy' to 'DenyAll'. | `network_access_policy = "DenyAll"` | [ref](https://learn.microsoft.com/azure/virtual-machines/disks-restrict-import-export-overview) |
+| `AZ-COSMOS-001` | high | Cosmos DB | Cosmos DB allows public network access. Set 'public_network_access_enabled' to false. | `public_network_access_enabled = false` | [ref](https://learn.microsoft.com/azure/cosmos-db/how-to-configure-firewall) |
+| `AZ-AKS-001` | high | AKS | AKS local accounts are enabled. Set 'local_account_disabled' to true. | `local_account_disabled = true` | [ref](https://learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad) |
+| `AZ-AKS-002` | medium | AKS | AKS Azure Policy add-on is disabled. Set 'azure_policy_enabled' to true. | `azure_policy_enabled = true` | [ref](https://learn.microsoft.com/azure/aks/use-azure-policy) |
+| `AZ-ACR-001` | high | Container Registry | Container Registry admin user is enabled. Set 'admin_enabled' to false. | `admin_enabled = false` | [ref](https://learn.microsoft.com/azure/container-registry/container-registry-authentication) |
+| `AZ-ACR-002` | medium | Container Registry | Container Registry allows public network access. Set 'public_network_access_enabled' to false. | `public_network_access_enabled = false` | [ref](https://learn.microsoft.com/azure/container-registry/container-registry-access-selected-networks) |
+| `AZ-LOG-001` | medium | Log Analytics | Log Analytics workspace allows queries over the public internet. Set 'internet_query_enabled' to false. | `internet_query_enabled = false` | [ref](https://learn.microsoft.com/azure/azure-monitor/logs/private-link-security) |
