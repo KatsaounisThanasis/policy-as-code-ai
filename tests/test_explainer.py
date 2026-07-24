@@ -149,3 +149,43 @@ def test_azureopenai_backend_requires_env(monkeypatch):
         monkeypatch.delenv(var, raising=False)
     with pytest.raises(SystemExit):
         explainer.get_backend("azureopenai")
+
+
+def test_apply_remediations_is_resource_scoped():
+    # Two storage accounts share an attribute; only the flagged one must change.
+    source = (
+        'resource "azurerm_storage_account" "bad" {\n'
+        "  public_network_access_enabled = true\n"
+        "}\n"
+        'resource "azurerm_storage_account" "good" {\n'
+        "  public_network_access_enabled = false\n"
+        "}\n"
+    )
+    violations = [
+        {"rule": "AZ-STORAGE-003", "resource": "azurerm_storage_account.bad"},
+    ]
+    patched, applied = explainer.apply_remediations(source, violations)
+    assert len(applied) == 1
+    assert "= true" not in patched  # the bad block was flipped
+    assert patched.count("public_network_access_enabled = false") == 2  # good untouched + bad now fixed
+    bad_block = patched.split('resource "azurerm_storage_account" "good"')[0]
+    assert "public_network_access_enabled = false" in bad_block
+
+
+def test_apply_remediations_same_attr_two_resources_both_flagged():
+    source = (
+        'resource "azurerm_storage_account" "one" {\n'
+        "  public_network_access_enabled = true\n"
+        "}\n"
+        'resource "azurerm_storage_account" "two" {\n'
+        "  public_network_access_enabled = true\n"
+        "}\n"
+    )
+    violations = [
+        {"rule": "AZ-STORAGE-003", "resource": "azurerm_storage_account.one"},
+        {"rule": "AZ-STORAGE-003", "resource": "azurerm_storage_account.two"},
+    ]
+    patched, applied = explainer.apply_remediations(source, violations)
+    assert len(applied) == 2  # both distinct resources patched (old global code deduped to 1)
+    assert patched.count("public_network_access_enabled = false") == 2
+    assert "= true" not in patched

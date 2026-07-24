@@ -38,64 +38,20 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
+import hcl
+import rules
+
 DEFAULT_MODEL = "qwen2.5-coder:3b"
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
-# Canonical Microsoft Learn references per rule id.
-# Keep this dict in sync with policies/enforce_security.rego.
-DOCS: dict[str, str] = {
-    "AZ-STORAGE-001": "https://learn.microsoft.com/azure/storage/blobs/anonymous-read-access-prevent",
-    "AZ-STORAGE-002": "https://learn.microsoft.com/azure/storage/common/shared-key-authorization-prevent",
-    "AZ-STORAGE-003": "https://learn.microsoft.com/azure/storage/common/storage-network-security",
-    "AZ-STORAGE-004": "https://learn.microsoft.com/azure/storage/common/transport-layer-security-configure-minimum-version",
-    "AZ-STORAGE-005": "https://learn.microsoft.com/azure/storage/common/storage-require-secure-transfer",
-    "AZ-NSG-001": "https://learn.microsoft.com/azure/virtual-network/network-security-groups-overview",
-    "AZ-NSG-002": "https://learn.microsoft.com/azure/virtual-network/network-security-groups-overview",
-    "AZ-KV-001": "https://learn.microsoft.com/azure/key-vault/general/soft-delete-overview",
-    "AZ-KV-002": "https://learn.microsoft.com/azure/key-vault/general/network-security",
-    "AZ-SQL-001": "https://learn.microsoft.com/azure/azure-sql/database/network-access-controls-overview",
-    "AZ-SQL-002": "https://learn.microsoft.com/azure/azure-sql/database/connectivity-settings",
-    "AZ-APP-001": "https://learn.microsoft.com/azure/app-service/configure-ssl-bindings",
-    "AZ-APP-002": "https://learn.microsoft.com/azure/app-service/configure-ssl-bindings",
-    "AZ-DISK-001": "https://learn.microsoft.com/azure/virtual-machines/disks-restrict-import-export-overview",
-    "AZ-DISK-002": "https://learn.microsoft.com/azure/virtual-machines/disks-restrict-import-export-overview",
-    "AZ-COSMOS-001": "https://learn.microsoft.com/azure/cosmos-db/how-to-configure-firewall",
-    "AZ-AKS-001": "https://learn.microsoft.com/azure/aks/manage-local-accounts-managed-azure-ad",
-    "AZ-AKS-002": "https://learn.microsoft.com/azure/aks/use-azure-policy",
-    "AZ-ACR-001": "https://learn.microsoft.com/azure/container-registry/container-registry-authentication",
-    "AZ-ACR-002": "https://learn.microsoft.com/azure/container-registry/container-registry-access-selected-networks",
-    "AZ-LOG-001": "https://learn.microsoft.com/azure/azure-monitor/logs/private-link-security",
-}
-
-# Deterministic remediation: rule id -> { attribute_name: new_value_as_hcl_literal }.
-# Values are written verbatim as the right-hand-side of an HCL assignment.
-# Strings must include their own quotes; booleans/numbers are bare tokens.
-REMEDIATIONS: dict[str, dict[str, str]] = {
-    "AZ-STORAGE-001": {"allow_nested_items_to_be_public": "false"},
-    "AZ-STORAGE-002": {"shared_access_key_enabled": "false"},
-    "AZ-STORAGE-003": {"public_network_access_enabled": "false"},
-    "AZ-STORAGE-004": {"min_tls_version": '"TLS1_2"'},
-    "AZ-STORAGE-005": {"https_traffic_only_enabled": "true"},
-    # NSG: an allow-any-inbound rule has no single "correct" CIDR/port, so the
-    # deterministic, fail-closed fix is to deny it until a human scopes it.
-    # Flipping access to Deny clears both AZ-NSG-001 and AZ-NSG-002.
-    "AZ-NSG-001": {"access": '"Deny"'},
-    "AZ-NSG-002": {"access": '"Deny"'},
-    "AZ-KV-001": {"purge_protection_enabled": "true"},
-    "AZ-KV-002": {"public_network_access_enabled": "false"},
-    "AZ-SQL-001": {"public_network_access_enabled": "false"},
-    "AZ-SQL-002": {"minimum_tls_version": '"1.2"'},
-    "AZ-APP-001": {"https_only": "true"},
-    "AZ-APP-002": {"minimum_tls_version": '"1.2"'},
-    "AZ-DISK-001": {"public_network_access_enabled": "false"},
-    "AZ-DISK-002": {"network_access_policy": '"DenyAll"'},
-    "AZ-COSMOS-001": {"public_network_access_enabled": "false"},
-    "AZ-AKS-001": {"local_account_disabled": "true"},
-    "AZ-AKS-002": {"azure_policy_enabled": "true"},
-    "AZ-ACR-001": {"admin_enabled": "false"},
-    "AZ-ACR-002": {"public_network_access_enabled": "false"},
-    "AZ-LOG-001": {"internet_query_enabled": "false"},
-}
+# Rule metadata (canonical docs + deterministic remediation map) now lives in the
+# repo-root rules.json — the single source of truth shared with scripts/opa_to_sarif.py
+# and the CI PR-comment table. These module-level names are kept for backward
+# compatibility with callers and tests.
+#   DOCS:         rule id -> canonical Microsoft Learn URL
+#   REMEDIATIONS: rule id -> { attribute_name: new_value_as_hcl_literal }
+DOCS: dict[str, str] = rules.docs()
+REMEDIATIONS: dict[str, dict[str, str]] = rules.remediations()
 
 SYSTEM_PROMPT = """You are a senior cloud security engineer reviewing an Azure Terraform plan.
 For each policy violation, produce a response in this EXACT format and nothing else:
@@ -211,7 +167,7 @@ class AzureOpenAIBackend(LLMBackend):
 
 class AnthropicBackend(LLMBackend):
     name = "anthropic"
-    DEFAULT_ANTHROPIC_MODEL = "claude-3-5-sonnet-latest"
+    DEFAULT_ANTHROPIC_MODEL = "claude-opus-4-8"
 
     def __init__(self, model: str | None = None) -> None:
         self.api_key = os.environ.get("ANTHROPIC_API_KEY", "")
@@ -304,37 +260,50 @@ def apply_remediations(
     source_text: str, violations: list[dict[str, Any]]
 ) -> tuple[str, list[tuple[str, str, str]]]:
     """
-    Apply per-violation remediations to the source HCL text.
-    Returns (patched_text, applied_changes) where applied_changes is a list of
-    (rule_id, attribute_name, new_value) tuples that were actually applied.
-    Attributes not found in the source are skipped (with no error).
+    Apply per-violation remediations to the source HCL text, **scoped to the
+    offending resource** when the violation carries a `resource` address.
+
+    Returns (patched_text, applied_changes) with applied_changes a list of
+    (rule_id, attribute_name, new_value) tuples actually applied. An attribute
+    not found (inside the resource block, or anywhere when the address is
+    unknown) is skipped with no error. Scoping means two resources that share an
+    attribute are patched independently and an already-correct resource is left
+    untouched — the previous global regex could patch the wrong resource.
     """
-    patched = source_text
+    lines = source_text.splitlines(keepends=True)
+    blocks = hcl.resource_block_lines(source_text)
     applied: list[tuple[str, str, str]] = []
-    seen: set[tuple[str, str]] = set()  # (rule_id, attr) — avoid duplicate work
+    seen: set[tuple[str, str, str]] = set()  # (address, rule_id, attr)
     for v in violations:
         rule = v.get("rule", "")
         fixes = REMEDIATIONS.get(rule)
         if not fixes:
             continue
+        norm = hcl.normalize_address(v.get("resource", "")) if v.get("resource") else ""
+        rng = blocks.get(norm)
+        # 0-based line indices to search: the resource block, else the whole file.
+        indices = range(rng[0] - 1, rng[1]) if rng else range(len(lines))
         for attr, new_val in fixes.items():
-            key = (rule, attr)
+            key = (norm, rule, attr)
             if key in seen:
                 continue
             seen.add(key)
-            # Match: optional leading whitespace, attr name, padding, =, padding, value, to EOL
             pattern = re.compile(
-                rf"^(?P<lead>\s*)(?P<name>{re.escape(attr)})(?P<pad>\s*=\s*).*$",
-                re.MULTILINE,
+                rf"^(?P<lead>\s*)(?P<name>{re.escape(attr)})(?P<pad>\s*=\s*).*$"
             )
-            new_text, n = pattern.subn(
-                lambda m, nv=new_val: f"{m.group('lead')}{m.group('name')}{m.group('pad')}{nv}",
-                patched,
-            )
-            if n > 0:
-                patched = new_text
+            for i in indices:
+                raw = lines[i]
+                body = raw[:-1] if raw.endswith("\n") else raw
+                m = pattern.match(body)
+                if not m:
+                    continue
+                lines[i] = (
+                    f"{m.group('lead')}{m.group('name')}{m.group('pad')}{new_val}"
+                    + ("\n" if raw.endswith("\n") else "")
+                )
                 applied.append((rule, attr, new_val))
-    return patched, applied
+                break
+    return "".join(lines), applied
 
 
 def unified_diff_str(old_text: str, new_text: str, old_name: str, new_name: str) -> str:

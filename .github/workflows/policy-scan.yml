@@ -60,29 +60,17 @@ jobs:
             const marker = '<!-- pac-ai-report -->';
             const raw = JSON.parse(fs.readFileSync('violations.json', 'utf8'));
             const violations = (((raw.result || [])[0] || {}).expressions || [])[0]?.value || [];
-            const fixes = {
-              "AZ-STORAGE-001": "allow_nested_items_to_be_public = false",
-              "AZ-STORAGE-002": "shared_access_key_enabled = false",
-              "AZ-STORAGE-003": "public_network_access_enabled = false",
-              "AZ-STORAGE-004": "min_tls_version = \"TLS1_2\"",
-              "AZ-STORAGE-005": "https_traffic_only_enabled = true",
-              "AZ-NSG-001": "access = \"Deny\"  (fail-closed; scope source/port before re-enabling)",
-              "AZ-NSG-002": "access = \"Deny\"  (fail-closed; restrict destination_port_range)",
-              "AZ-KV-001": "purge_protection_enabled = true",
-              "AZ-KV-002": "public_network_access_enabled = false",
-              "AZ-SQL-001": "public_network_access_enabled = false",
-              "AZ-SQL-002": "minimum_tls_version = \"1.2\"",
-              "AZ-APP-001": "https_only = true",
-              "AZ-APP-002": "site_config.minimum_tls_version = \"1.2\"",
-              "AZ-DISK-001": "public_network_access_enabled = false",
-              "AZ-DISK-002": "network_access_policy = \"DenyAll\"",
-              "AZ-COSMOS-001": "public_network_access_enabled = false",
-              "AZ-AKS-001": "local_account_disabled = true",
-              "AZ-AKS-002": "azure_policy_enabled = true",
-              "AZ-ACR-001": "admin_enabled = false",
-              "AZ-ACR-002": "public_network_access_enabled = false",
-              "AZ-LOG-001": "internet_query_enabled = false"
-            };
+            // Fix strings derived from the repo-root rules.json single source of
+            // truth (same file src/explainer.py and scripts/opa_to_sarif.py read),
+            // so the PR comment can never drift from the actual remediation.
+            const ruleDefs = JSON.parse(fs.readFileSync('rules.json', 'utf8')).rules;
+            const fixes = {};
+            for (const r of ruleDefs) {
+              if (!r.fix) continue;
+              let text = r.fix_display || `${r.fix.attribute} = ${r.fix.value}`;
+              if (r.note) text += `  (${r.note})`;
+              fixes[r.id] = text;
+            }
             const esc = (val) => String(val ?? '').replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
             let rows;
             if (violations.length === 0) {

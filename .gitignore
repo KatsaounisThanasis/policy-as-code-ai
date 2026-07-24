@@ -43,3 +43,6 @@ Thumbs.db
 
 # Internal planning/handoff (local only)
 NEXT_SESSION.md
+
+# project-cartographer local knowledge graph
+.cartographer/
