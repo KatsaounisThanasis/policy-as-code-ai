@@ -41,7 +41,7 @@ def render() -> str:
     out: list[str] = [
         "# Policy Catalog",
         "",
-        "> Auto-generated from [`rules.json`](rules.json) by `make rules-doc` — do not edit by hand.",
+        "> Auto-generated from [`rules.json`](rules.json) by `make rules-doc` — do not edit.",
         "",
         f"**{len(defs)} rules across {len(services)} Azure services.** "
         "Each rule is enforced by a Rego policy under `policies/`, carries a deterministic "

@@ -15,22 +15,41 @@ Pure stdlib on purpose — the project ships zero runtime dependencies.
 from __future__ import annotations
 
 import json
-from functools import lru_cache
+import os
+from functools import cache
 from pathlib import Path
 from typing import Any
 
-# rules.json lives at the repo root (this file is src/rules.py).
-RULES_PATH = Path(__file__).resolve().parent.parent / "rules.json"
+
+def _resolve_rules_path() -> Path:
+    """Locate rules.json: $PAC_RULES_JSON, then repo-root next to src/, then CWD.
+
+    The repo-root case (src/rules.py -> ../rules.json) covers `python3 src/...`
+    runs and editable installs; the env override + CWD fallback let an installed
+    `pac-explain` be pointed at a rules.json in another checkout.
+    """
+    env = os.environ.get("PAC_RULES_JSON")
+    if env:
+        return Path(env)
+    repo_root = Path(__file__).resolve().parent.parent / "rules.json"
+    if repo_root.exists():
+        return repo_root
+    return Path.cwd() / "rules.json"
 
 
-@lru_cache(maxsize=None)
+RULES_PATH = _resolve_rules_path()
+
+
+@cache
 def load_rules(path: str | None = None) -> tuple[dict[str, Any], ...]:
     """Return the rule dicts as an (immutable, cached) tuple."""
-    p = Path(path) if path else RULES_PATH
+    p = Path(path) if path else _resolve_rules_path()
     try:
         data = json.loads(p.read_text())
     except FileNotFoundError as exc:  # pragma: no cover - config must exist
-        raise RuntimeError(f"rules.json not found at {p}") from exc
+        raise RuntimeError(
+            f"rules.json not found at {p}. Set PAC_RULES_JSON or run from the repo root."
+        ) from exc
     return tuple(data["rules"])
 
 

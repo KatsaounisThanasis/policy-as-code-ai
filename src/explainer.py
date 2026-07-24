@@ -344,8 +344,11 @@ async def _async_main(args: argparse.Namespace) -> int:
         f"_Model: `{backend.model}` via {backend.name}. Source: `{args.input}`._",
     ]
 
-    for idx, (v, answer) in enumerate(zip(violations, answers), 1):
-        header = f"{severity_tag(v.get('severity', ''))} {v.get('rule', '?')} on {v.get('resource', '?')}"
+    for idx, (v, answer) in enumerate(zip(violations, answers, strict=True), 1):
+        header = (
+            f"{severity_tag(v.get('severity', ''))} "
+            f"{v.get('rule', '?')} on {v.get('resource', '?')}"
+        )
         print(f"[{idx}/{len(violations)}] {header}")
         print(answer)
         ref = DOCS.get(v.get("rule", ""), "")
@@ -379,7 +382,7 @@ async def _async_main(args: argparse.Namespace) -> int:
             print("No applicable remediations found in REMEDIATIONS map.")
         else:
             out_path.write_text(patched)
-            print(f"\n=== REMEDIATION ===")
+            print("\n=== REMEDIATION ===")
             print(f"Applied {len(applied)} change(s) -> wrote {out_path}")
             for rule, attr, val in applied:
                 print(f"  {rule}: {attr} = {val}")

@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "policy-as-code-ai"
+version = "0.2.0"
+description = "Local-first Policy-as-Code for Azure IaC with provable, deterministic remediation."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [{ name = "KatsaounisThanasis" }]
+keywords = [
+  "policy-as-code", "opa", "rego", "terraform", "azure",
+  "security", "sarif", "iac", "local-llm", "devsecops",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
+]
+# Zero runtime dependencies: the pipeline shells out to opa/terraform and the
+# explainer talks to a local LLM over stdlib urllib. Nothing to pip-install.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/KatsaounisThanasis/policy-as-code-ai"
+Repository = "https://github.com/KatsaounisThanasis/policy-as-code-ai"
+Issues = "https://github.com/KatsaounisThanasis/policy-as-code-ai/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.6"]
+
+# `pac-explain` is the explain + deterministic-fix half of the pipeline: feed it a
+# violations.json (produced by `make scan` / `make scan-offline`) and it writes the
+# risk report + fixed Terraform. The scan itself needs the `opa` binary and the
+# policies/ tree, so the full loop runs from the repo or the GitHub Action.
+[project.scripts]
+pac-explain = "explainer:main"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+py-modules = ["explainer", "rules", "hcl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "scripts"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

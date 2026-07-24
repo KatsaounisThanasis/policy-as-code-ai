@@ -18,10 +18,13 @@ def test_resource_block_lines():
     assert blocks["azurerm_storage_account.b"] == (5, 7)
 
 
+ATTR = "public_network_access_enabled"
+
+
 def test_find_attr_line_is_resource_scoped():
     # Same attribute in two blocks resolves to the right line per resource.
-    assert hcl.find_attr_line(SRC, "azurerm_storage_account.a", "public_network_access_enabled") == 2
-    assert hcl.find_attr_line(SRC, "azurerm_storage_account.b", "public_network_access_enabled") == 6
+    assert hcl.find_attr_line(SRC, "azurerm_storage_account.a", ATTR) == 2
+    assert hcl.find_attr_line(SRC, "azurerm_storage_account.b", ATTR) == 6
 
 
 def test_find_attr_line_missing_attr_falls_back_to_block_start():
@@ -29,7 +32,7 @@ def test_find_attr_line_missing_attr_falls_back_to_block_start():
 
 
 def test_find_attr_line_unknown_block_first_match():
-    assert hcl.find_attr_line(SRC, "azurerm_storage_account.zzz", "public_network_access_enabled") == 2
+    assert hcl.find_attr_line(SRC, "azurerm_storage_account.zzz", ATTR) == 2
 
 
 def test_normalize_address():

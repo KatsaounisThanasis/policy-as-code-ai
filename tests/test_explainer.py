@@ -1,7 +1,10 @@
-import json
 import asyncio
+import json
+
 import pytest
+
 import explainer
+
 
 def test_load_violations_valid(tmp_path):
     f = tmp_path / "violations.json"
@@ -167,7 +170,7 @@ def test_apply_remediations_is_resource_scoped():
     patched, applied = explainer.apply_remediations(source, violations)
     assert len(applied) == 1
     assert "= true" not in patched  # the bad block was flipped
-    assert patched.count("public_network_access_enabled = false") == 2  # good untouched + bad now fixed
+    assert patched.count("public_network_access_enabled = false") == 2  # good stays + bad fixed
     bad_block = patched.split('resource "azurerm_storage_account" "good"')[0]
     assert "public_network_access_enabled = false" in bad_block
 
