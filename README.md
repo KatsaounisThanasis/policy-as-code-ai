@@ -12,8 +12,6 @@
 
 ![Demo: scan finds violations, the local LLM explains them, a deterministic engine fixes them](demo/demo.gif)
 
-![Architecture Diagram](docs/architecture.svg)
-
 **60-second tour:** `make scan` finds the misconfigurations, `make explain` has a local LLM tell you why each one is risky, `make remediate` writes the fix, and `make verify` re-runs the gate to prove it's clean. Nothing leaves your machine.
 
 ### Try it in 30 seconds — no Azure, no Terraform
@@ -72,24 +70,7 @@ Every rule's metadata — severity, message, docs link, remediation — lives in
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    TF["terraform/main.tf<br/>(insecure baseline)"] -->|terraform plan -json| PLAN["tfplan.json"]
-    PLAN -->|opa eval| OPA{"OPA / Rego<br/>policies"}
-    OPA -->|violations.json| EXP["explainer.py"]
-
-    subgraph LOCAL["100% local"]
-        EXP -->|parallel calls| OLLAMA[("local LLM<br/>(on your machine)")]
-        OLLAMA --> EXP
-    end
-
-    EXP --> REPORT["explanations.md<br/>risk · fix · verify"]
-    EXP -->|deterministic map| FIX["main_fixed.tf<br/>+ unified diff"]
-    FIX -.->|re-scan| OPA
-    OPA -.->|0 violations ✓| PROOF["✅ proof"]
-
-    DOCS[/"MS Learn<br/>doc refs"/] --> REPORT
-```
+![Architecture Diagram](docs/architecture.svg)
 
 ## Quick start
 
