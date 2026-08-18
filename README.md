@@ -12,6 +12,8 @@
 
 ![Demo: scan finds violations, the local LLM explains them, a deterministic engine fixes them](demo/demo.gif)
 
+![Architecture Diagram](docs/architecture.svg)
+
 **60-second tour:** `make scan` finds the misconfigurations, `make explain` has a local LLM tell you why each one is risky, `make remediate` writes the fix, and `make verify` re-runs the gate to prove it's clean. Nothing leaves your machine.
 
 ### Try it in 30 seconds — no Azure, no Terraform
